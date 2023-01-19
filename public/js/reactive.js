@@ -14,20 +14,31 @@ function reactive(data) {
   });
 }
 function watch(source, cb, options = {}) {
-  let newVal, oldVal;
   if (typeof source === "function") {
     getter = source;
   } else {
     getter = () => traverse(source);
   }
+  let newVal, oldVal, cleanup;
+  function onInvalidate(fn) {
+    cleanup = fn;
+  }
   function job() {
     newVal = effectFn();
-    cb(newVal, oldVal);
+    if (cleanup) {
+      cleanup();
+    }
+    cb(newVal, oldVal, onInvalidate);
     oldVal = newVal;
   }
   const effectFn = effect(() => getter(), {
     lazy: true,
-    scheduler: job,
+    scheduler: () => {
+      if (options.flush === "post") {
+        const p = Promise.resolve();
+        p.then(job);
+      }
+    },
   });
   if (options.immediate) {
     job();
