@@ -13,6 +13,36 @@ function reactive(data) {
     },
   });
 }
+function watch(source, cb, options = {}) {
+  let newVal, oldVal;
+  if (typeof source === "function") {
+    getter = source;
+  } else {
+    getter = () => traverse(source);
+  }
+  function job() {
+    newVal = effectFn();
+    cb(newVal, oldVal);
+    oldVal = newVal;
+  }
+  const effectFn = effect(() => getter(), {
+    lazy: true,
+    scheduler: job,
+  });
+  if (options.immediate) {
+    job();
+  } else {
+    oldVal = effectFn();
+  }
+}
+function traverse(value, seen = new Set()) {
+  if (typeof value !== "object" || value === null || seen.has(value)) return;
+  seen.add(value);
+  for (const key in value) {
+    traverse(value[key], seen);
+  }
+  return value;
+}
 function computed(getter) {
   let dirty = true;
   let value;
