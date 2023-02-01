@@ -1,15 +1,24 @@
 let activeEffect;
+const ITERATE_KEY = Symbol();
 const bucket = new WeakMap();
 const effectStack = [];
 function reactive(data) {
   return new Proxy(data, {
-    get(target, key) {
+    get(target, key, receiver) {
       track(target, key);
-      return target[key];
+      return Reflect.get(target, key, receiver);
     },
-    set(target, key, newVal) {
-      target[key] = newVal;
+    set(target, key, newVal, receiver) {
+      Reflect.set(target, key, newVal, receiver);
       trigger(target, key);
+    },
+    has(target, key, receiver) {
+      track(target, key);
+      return Reflect.has(target, key, receiver);
+    },
+    ownKeys(target) {
+      track(target, ITERATE_KEY);
+      return Reflect.ownKeys(target);
     },
   });
 }
@@ -118,9 +127,16 @@ function trigger(target, key) {
   const depsMap = bucket.get(target);
   if (!depsMap) return;
   const effects = depsMap.get(key);
+  const iterateEffects = depsMap.get(ITERATE_KEY);
   const effectsToRun = new Set();
   effects &&
     effects.forEach((effectFn) => {
+      if (effectFn !== activeEffect) {
+        effectsToRun.add(effectFn);
+      }
+    });
+  iterateEffects &&
+    iterateEffects.forEach((effectFn) => {
       if (effectFn !== activeEffect) {
         effectsToRun.add(effectFn);
       }
