@@ -1,6 +1,7 @@
 const triggerType = {
   SET: "SET",
   ADD: "ADD",
+  DELETE: "DELETE",
 };
 const ITERATE_KEY = Symbol();
 const bucket = new WeakMap();
@@ -26,6 +27,14 @@ function reactive(data) {
     ownKeys(target) {
       track(target, ITERATE_KEY);
       return Reflect.ownKeys(target);
+    },
+    deleteProperty(target, key) {
+      const hadKey = Object.prototype.hasOwnProperty.call(target, key);
+      const res = Reflect.deleteProperty(target, key);
+      if (res && hadKey) {
+        trigger(target, key, triggerType.DELETE);
+      }
+      return res;
     },
   });
 }
@@ -141,7 +150,7 @@ function trigger(target, key, type) {
         effectsToRun.add(effectFn);
       }
     });
-  if (type === triggerType.ADD) {
+  if (type === triggerType.ADD || type === triggerType.DELETE) {
     const iterateEffects = depsMap.get(ITERATE_KEY);
     iterateEffects &&
       iterateEffects.forEach((effectFn) => {
