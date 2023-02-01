@@ -1,7 +1,11 @@
-let activeEffect;
+const triggerType = {
+  SET: "SET",
+  ADD: "ADD",
+};
 const ITERATE_KEY = Symbol();
 const bucket = new WeakMap();
 const effectStack = [];
+let activeEffect;
 function reactive(data) {
   return new Proxy(data, {
     get(target, key, receiver) {
@@ -9,8 +13,11 @@ function reactive(data) {
       return Reflect.get(target, key, receiver);
     },
     set(target, key, newVal, receiver) {
+      const type = Object.prototype.hasOwnProperty.call(target, key)
+        ? triggerType.SET
+        : triggerType.ADD;
       Reflect.set(target, key, newVal, receiver);
-      trigger(target, key);
+      trigger(target, key, type);
     },
     has(target, key, receiver) {
       track(target, key);
@@ -123,11 +130,10 @@ function track(target, key) {
   deps.add(activeEffect);
   activeEffect.deps.push(deps);
 }
-function trigger(target, key) {
+function trigger(target, key, type) {
   const depsMap = bucket.get(target);
   if (!depsMap) return;
   const effects = depsMap.get(key);
-  const iterateEffects = depsMap.get(ITERATE_KEY);
   const effectsToRun = new Set();
   effects &&
     effects.forEach((effectFn) => {
@@ -135,12 +141,15 @@ function trigger(target, key) {
         effectsToRun.add(effectFn);
       }
     });
-  iterateEffects &&
-    iterateEffects.forEach((effectFn) => {
-      if (effectFn !== activeEffect) {
-        effectsToRun.add(effectFn);
-      }
-    });
+  if (type === triggerType.ADD) {
+    const iterateEffects = depsMap.get(ITERATE_KEY);
+    iterateEffects &&
+      iterateEffects.forEach((effectFn) => {
+        if (effectFn !== activeEffect) {
+          effectsToRun.add(effectFn);
+        }
+      });
+  }
   effectsToRun.forEach((effectFn) => {
     if (effectFn.options.scheduler) {
       effectFn.options.scheduler(effectFn);
